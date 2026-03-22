@@ -34,7 +34,7 @@ jobs:
       - name: Terraform Apply
         run: |
           terraform init
-          terraform apply -auto-approve
+          terraform destroy -auto-approve
 
       # Get EC2 Public EC2 INSTANCE ID from Terraform
       - name: Export Public ID
