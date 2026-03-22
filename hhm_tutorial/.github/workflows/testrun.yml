@@ -15,7 +15,7 @@ jobs:
       public_ec2_id: ${{ steps.prid.outputs.PUBLIC_EC2_INSTANCE_ID }}
 
     steps:
-      # Checkout.
+      # Checkout
       - name: Checkout
         uses: actions/checkout@v3
 
