@@ -1,0 +1,102 @@
+name: Simple Terraform + Ansible
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    
+    outputs:
+      role_arn2: ${{ steps.tf.outputs.ROLE_ARN }}
+      private_ec2_id: ${{ steps.puid.outputs.PRIVATE_EC2_INSTANCE_ID }}
+      public_ec2_id: ${{ steps.prid.outputs.PUBLIC_EC2_INSTANCE_ID }}
+
+    steps:
+      # Checkout
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:  us-east-1
+
+      # Setup Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      # Terraform Init + Apply
+      - name: Terraform Apply
+        run: |
+          terraform init
+          terraform apply -auto-approve
+
+      # Get EC2 Public EC2 INSTANCE ID from Terraform
+      - name: Export Public ID
+        id: puid
+        run: echo "PUBLIC_EC2_INSTANCE_ID=$(terraform output -raw public_ec2_instance_id)" >> $GITHUB_OUTPUT
+
+      # Get EC2 Private EC2 INSTANCE ID from Terraform
+      - name: Export Private ID
+        id: prid
+        run: echo "PRIVATE_EC2_INSTANCE_ID=$(terraform output -raw private_ec2_instance_id)" >> $GITHUB_OUTPUT
+
+      # Get EC2 Private EC2 INSTANCE ID from Terraform
+      - name: Export IAM Role
+        id: tf
+        run: echo "ROLE_ARN=$(terraform output -raw role_arn)" >> $GITHUB_OUTPUT
+
+
+  ansible_configuration:
+    runs-on: ubuntu-latest
+    needs: [terraform]
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      # ----------------------------------
+      # Checkout repo
+      # ----------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      # ----------------------------
+      # Install Python 
+      # ----------------------------
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Ansible and dependencies
+        run: |
+            python -m pip install --upgrade pip
+
+      - name: Install Ansible and dependencies2
+        run: |
+            pip install ansible boto3 botocore 
+
+      - name: Install amazon.aws collection
+        run: |
+            ansible-galaxy collection install amazon.aws community.aws
+
+      # Assume Role
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ needs.terraform.outputs.role_arn2 }}
+          aws-region: us-east-1
+
+      # Install Ansible
+      - name: Install Ansible
+        run: pip install ansible
+
+      # Run Ansible
+      - name: Run Playbook
+        run: ansible-playbook -i inventory.ini playbook.yml
